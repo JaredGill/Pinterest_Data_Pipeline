@@ -9,7 +9,6 @@ from sqlalchemy import text
 import yaml
 from datetime import datetime
 
-# This class likely serves as a connector to interact with an AWS database.
 class AWSDBConnector:
 
     def __init__(self, creds: dict) -> None:
@@ -32,6 +31,14 @@ class AWSDBConnector:
         engine = sqlalchemy.create_engine(f"mysql+pymysql://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}/{self.DATABASE}?charset=utf8mb4")
         return engine
     
+    def get_random_row_from_table(self, table_name, row_idx, conn):
+        query = text(f"SELECT * FROM {table_name} LIMIT {row_idx}, 1")
+        selected_row = conn.execute(query)
+            
+        for row in selected_row:
+            result = dict(row._mapping)
+        return result
+
 def load_yaml(path):
     with open(path, 'r') as file:
         data = yaml.safe_load(file)
@@ -44,36 +51,65 @@ def convert_datetime_to_string(data):
     return data
 
 
-def stream_to_kafka(
-        invoke_url, 
-        topic_name, 
-        data):
-    
-    headers = {'Content-Type': 'application/vnd.kafka.json.v2+json'}
-
-    payload = json.dumps({
+def create_kafka_payload(data):
+    return json.dumps({
         "records": [
             {"value": data}
             ]
         })
+
+def create_kinesis_payload(stream_name, data, partition_key):
+    return json.dumps({
+        "StreamName": stream_name, 
+        "Data": data, 
+        "PartitionKey": partition_key
+        })
+
+def send_request(request_type, full_invoke_url, headers, payload, stream_name):
+    response = requests.request(request_type,
+                                full_invoke_url,
+                                headers=headers,
+                                data=payload,
+                                timeout=60
+                                )
     
-    #print(payload)
-    full_invoke_url = f"{invoke_url}/topics/{topic_name}"
-    #print(full_invoke_url)
-    response = requests.request("POST", full_invoke_url, headers=headers, data=payload)
-
     if response.status_code == 200:
-        print(f"Data successfully sent to topic {topic_name}")
+        print(f"Data successfully sent to {stream_name}")
     else:
-        print(f"Failed to send data to topic {topic_name}: {response.status_code} - {response.text}")
+        print(f"Failed to send data to {stream_name}: {response.status_code} - {response.text}")
 
 
-def run_infinite_post_data_loop(engine, api_details):
-    api_invoke_url = api_details['invoke_url']
-    pin_topic = api_details['pin_topic']
-    geo_topic = api_details['geo_topic']
-    user_topic = api_details['user_topic']
+def stream_to_kafka(invoke_url, topic_name, data):
+    headers = {'Content-Type': 'application/vnd.kafka.json.v2+json'}
+    payload = create_kafka_payload(data)
+    full_invoke_url = f"{invoke_url}/topics/{topic_name}"
+    send_request("POST", full_invoke_url, headers, payload, f"Kafka topic {topic_name}")
 
+
+def stream_to_kinesis(invoke_url, stream_name, data, partition_key):
+    headers = {'Content-Type': 'application/json'}
+    full_invoke_url = f"{invoke_url}/streams/{stream_name}/record"
+    print()
+    print(full_invoke_url)
+    print()
+    payload = create_kinesis_payload(stream_name, data, partition_key)
+    send_request("PUT", full_invoke_url, headers, payload, f"Kinesis stream {stream_name}")
+
+
+def run_infinite_post_data_loop(db_conn_instance, kafka_api_details, kinesis_api_details):
+    kafka_invoke_url = kafka_api_details['invoke_url']
+    pin_topic = kafka_api_details['pin_topic']
+    geo_topic = kafka_api_details['geo_topic']
+    user_topic = kafka_api_details['user_topic']
+    
+    kinesis_invoke_url = kinesis_api_details['invoke_url']
+    kinesis_stream_name = kinesis_api_details['stream_name']
+    pin_key = kinesis_api_details["partition_keys"]["pin"]
+    geo_key = kinesis_api_details["partition_keys"]["geo"]
+    user_key = kinesis_api_details["partition_keys"]["user"]
+
+    engine = db_conn_instance.create_db_connector()
+    
     for i in range(500):
         print(i)
         sleep(random.randrange(0, 2))
@@ -81,40 +117,55 @@ def run_infinite_post_data_loop(engine, api_details):
 
         with engine.connect() as connection:
 
-            pin_string = text(f"SELECT * FROM pinterest_data LIMIT {random_row}, 1")
-            pin_selected_row = connection.execute(pin_string)
+            pin_result = db_conn_instance.get_random_row_from_table(
+                'pinterest_data',
+                random_row,
+                connection
+            )
+            cleaned_pin_result = convert_datetime_to_string(pin_result)
+            print('Pin row:')
+            print('Kinesis')
+            stream_to_kinesis(kinesis_invoke_url, kinesis_stream_name, cleaned_pin_result, partition_key=pin_key)
+            print('Kafka')
+            #stream_to_kafka(kafka_invoke_url, pin_topic, cleaned_pin_result)
             
-            for row in pin_selected_row:
-                pin_result = dict(row._mapping)
-                cleaned_pin_result = convert_datetime_to_string(pin_result)  
-                print('Pin row:')
-                stream_to_kafka(api_invoke_url, pin_topic, cleaned_pin_result)
-
-            geo_string = text(f"SELECT * FROM geolocation_data LIMIT {random_row}, 1")
-            geo_selected_row = connection.execute(geo_string)
-                
-            for row in geo_selected_row:
-                geo_result = dict(row._mapping)
-                cleaned_geo_result = convert_datetime_to_string(geo_result)  
-                print('Geo row:')
-                stream_to_kafka(api_invoke_url, geo_topic, cleaned_geo_result)
-
-            user_string = text(f"SELECT * FROM user_data LIMIT {random_row}, 1")
-            user_selected_row = connection.execute(user_string)
-                
-            for row in user_selected_row:
-                user_result = dict(row._mapping)
-                cleaned_user_result = convert_datetime_to_string(user_result)
-                print('User row')
-                stream_to_kafka(api_invoke_url, user_topic, cleaned_user_result)
+            geo_result = db_conn_instance.get_random_row_from_table(
+                'geolocation_data',
+                random_row,
+                connection
+                )
+            cleaned_geo_result = convert_datetime_to_string(geo_result)
+            print('Geo row:')
+            print('Kinesis')
+            stream_to_kinesis(
+                kinesis_invoke_url, 
+                kinesis_stream_name, 
+                cleaned_geo_result, 
+                partition_key=geo_key
+                )
+            print('Kafka')
+            #stream_to_kafka(kafka_invoke_url, geo_topic, cleaned_geo_result)
+            
+            user_result = db_conn_instance.get_random_row_from_table(
+                'user_data',
+                random_row,
+                connection
+                )
+            cleaned_user_result = convert_datetime_to_string(user_result)
+            print('User row:')
+            print('Kinesis')
+            stream_to_kinesis(kinesis_invoke_url, kinesis_stream_name, cleaned_user_result, partition_key=user_key)
+            print('Kafka')
+            #stream_to_kafka(kafka_invoke_url, user_topic, cleaned_user_result)
         
         
 
 if __name__ == "__main__":
     pinterest_rds_creds = load_yaml('pinterest_data_rds.yaml')
     #print(pinterest_rds_creds)
-    api_creds = load_yaml('API_invoke_url.yaml')
+    kafka_api_creds = load_yaml('API_invoke_url.yaml')
+    kinesis_api_creds = load_yaml('kinesis_api.yaml')
 
     new_connector = AWSDBConnector(pinterest_rds_creds)
-    engine = new_connector.create_db_connector()
-    run_infinite_post_data_loop(engine, api_creds)
+
+    run_infinite_post_data_loop(new_connector, kafka_api_creds, kinesis_api_creds)
