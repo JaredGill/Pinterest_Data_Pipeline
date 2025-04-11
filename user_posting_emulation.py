@@ -1,13 +1,14 @@
-import requests
-from time import sleep
-import random
-from multiprocessing import Process
 import boto3
 import json
+import random
+import requests
 import sqlalchemy
-from sqlalchemy import text
 import yaml
 from datetime import datetime
+from time import sleep
+from multiprocessing import Process
+from sqlalchemy import text
+
 
 class AWSDBConnector:
 
@@ -127,7 +128,7 @@ def run_infinite_post_data_loop(db_conn_instance, kafka_api_details, kinesis_api
             print('Kinesis')
             stream_to_kinesis(kinesis_invoke_url, kinesis_stream_name, cleaned_pin_result, partition_key=pin_key)
             print('Kafka')
-            #stream_to_kafka(kafka_invoke_url, pin_topic, cleaned_pin_result)
+            stream_to_kafka(kafka_invoke_url, pin_topic, cleaned_pin_result)
             
             geo_result = db_conn_instance.get_random_row_from_table(
                 'geolocation_data',
@@ -144,7 +145,7 @@ def run_infinite_post_data_loop(db_conn_instance, kafka_api_details, kinesis_api
                 partition_key=geo_key
                 )
             print('Kafka')
-            #stream_to_kafka(kafka_invoke_url, geo_topic, cleaned_geo_result)
+            stream_to_kafka(kafka_invoke_url, geo_topic, cleaned_geo_result)
             
             user_result = db_conn_instance.get_random_row_from_table(
                 'user_data',
@@ -156,7 +157,7 @@ def run_infinite_post_data_loop(db_conn_instance, kafka_api_details, kinesis_api
             print('Kinesis')
             stream_to_kinesis(kinesis_invoke_url, kinesis_stream_name, cleaned_user_result, partition_key=user_key)
             print('Kafka')
-            #stream_to_kafka(kafka_invoke_url, user_topic, cleaned_user_result)
+            stream_to_kafka(kafka_invoke_url, user_topic, cleaned_user_result)
         
         
 
