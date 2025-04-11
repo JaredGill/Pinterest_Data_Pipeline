@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 
 notebook_task = {
-    'notebook_path': '/Workspace/Users/name@email_provider/ETL',
+    'notebook_path': '/Workspace/Users/name@email_provider/Kafka_ETL',
 }
 
 notebook_params = {
