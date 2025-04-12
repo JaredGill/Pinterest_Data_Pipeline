@@ -1,6 +1,44 @@
 # Pinterest_Data_Pipeline
 
-This project simulates a scalable data engineering pipeline for processing user activity data similar to that from Pinterest. It incorporates both streaming (Kinesis) and batch (Kafka/S3) processing architectures, with integration across AWS, Databricks, and Apache Airflow (MWAA) for orchestration and transformation.
+---
+
+## Table of Contents
+
+- [Description](#description)
+- [Project Aim](#project-aim)
+- [Architecture Overview](#architecture-overview)
+- [Technologies Used](#technologies-used)
+- [File Structure](#file-structure)
+
+---
+
+## Description
+
+This project simulates a scalable, real-world data pipeline inspired by platforms like Pinterest. It demonstrates how to ingest, process, and store user activity data using both **batch (Kafka)** and **streaming (Kinesis)** paradigms. The system is fully orchestrated using Apache Airflow and processes data using Databricks notebooks.
+
+**Key focus areas:**
+- Building batch and streaming pipelines side-by-side
+- Integrating AWS services (RDS, Kinesis, S3, EC2, MWAA)
+- Automating ETL workflows
+- Writing clean, queryable Delta Lake outputs
+
+---
+
+## Project Aim
+
+The goal of this project is to showcase the full lifecycle of modern data engineering pipelines, covering both **streaming and batch ingestion** using industry-standard tools.
+
+It aims to:
+
+- Simulate the ingestion of `user`, `pin`, and `geo` data in both batch and real-time
+- Demonstrate data ingestion via **Kafka REST Proxy** and **Kinesis Streams**
+- Use **Airflow (MWAA)** to orchestrate processing logic in Databricks
+- Store clean and transformed data in **Delta Lake** for analytics
+
+---
+
+## Architecture Overview
+![Image](https://github.com/user-attachments/assets/0bdd8a4c-c8f6-402f-afaf-690870fde2e9)
 
 ---
 
@@ -19,13 +57,8 @@ This project simulates a scalable data engineering pipeline for processing user 
   - Databricks (Apache Spark) – ETL and data analytics
   - Delta Lake – Unified data lake format
 - **Languages & Libraries**
-  - Python, PySpark, SQLAlchemy, Boto3, YAML
+  - Python, PySpark, SQLAlchemy, YAML
   - Apache Airflow DAGs
-
----
-
-## Architecture Overview
-![Image](https://github.com/user-attachments/assets/0bdd8a4c-c8f6-402f-afaf-690870fde2e9)
 
 ---
 
